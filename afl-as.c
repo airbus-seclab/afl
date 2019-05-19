@@ -35,7 +35,35 @@
 #include "debug.h"
 #include "alloc-inl.h"
 
-#include "afl-as.h"
+#ifdef TARGET_X86
+#include "afl-as-x86.h"
+static inline int conditional_branch(u8 *line)
+{
+   return (line[1] == 'j' && line[2] != 'm');
+}
+
+#elif defined(TARGET_PPC)
+#include "afl-as-ppc.h"
+
+static inline int unconditional_branch(u8 *op)
+{
+   /* "b", "ba", "bl", "bla", "blr", "bctr", "blrl", "bctrl" */
+   return (
+      *op == ' '              ||
+      !strncmp(op, "a ",  2)  ||
+      !strncmp(op, "l ",  2)  ||
+      !strncmp(op, "lr",  2)  ||
+      !strncmp(op, "la",  2)  ||
+      !strncmp(op, "ctr", 3)
+      );
+}
+
+static inline int conditional_branch(char *line)
+{
+   return (line[1] == 'b' && !unconditional_branch(line+2));
+}
+
+#endif
 
 #include <stdio.h>
 #include <unistd.h>
@@ -66,6 +94,9 @@ static u32  inst_ratio = 100,   /* Instrumentation probability (%)      */
    instrumentation for whichever mode we were compiled with. This is not
    perfect, but should do the trick for almost all use cases. */
 
+#ifdef TARGET_PPC
+static u8 use_64bit = 0;
+#else
 #ifdef __x86_64__
 
 static u8   use_64bit = 1;
@@ -79,7 +110,7 @@ static u8   use_64bit = 0;
 #endif /* __APPLE__ */
 
 #endif /* ^__x86_64__ */
-
+#endif
 
 /* Examine and modify parameters to pass to 'as'. Note that the file name
    is always the last parameter passed by GCC, so we exploit this property
@@ -247,7 +278,7 @@ static void add_instrumentation(void) {
 
   outf = fdopen(outfd, "w");
 
-  if (!outf) PFATAL("fdopen() failed");  
+  if (!outf) PFATAL("fdopen() failed");
 
   while (fgets(line, MAX_LINE, inf)) {
 
@@ -288,10 +319,11 @@ static void add_instrumentation(void) {
 
       if (!strncmp(line + 2, "text\n", 5) ||
           !strncmp(line + 2, "section\t.text", 13) ||
+          !strncmp(line + 2, "section\t\".text\"", 15) ||
           !strncmp(line + 2, "section\t__TEXT,__text", 21) ||
           !strncmp(line + 2, "section __TEXT,__text", 21)) {
         instr_ok = 1;
-        continue; 
+        continue;
       }
 
       if (!strncmp(line + 2, "section\t", 8) ||
@@ -362,9 +394,7 @@ static void add_instrumentation(void) {
        branch destination label (handled later on). */
 
     if (line[0] == '\t') {
-
-      if (line[1] == 'j' && line[2] != 'm' && R(100) < inst_ratio) {
-
+      if (conditional_branch(line) && R(100) < inst_ratio) {
         fprintf(outf, use_64bit ? trampoline_fmt_64 : trampoline_fmt_32,
                 R(MAP_SIZE));
 
@@ -481,7 +511,7 @@ int main(int argc, char** argv) {
   if (isatty(2) && !getenv("AFL_QUIET")) {
 
     SAYF(cCYA "afl-as " cBRI VERSION cRST " by <lcamtuf@google.com>\n");
- 
+
   } else be_quiet = 1;
 
   if (argc < 2) {

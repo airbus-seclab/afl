@@ -65,9 +65,15 @@ afl-gcc: afl-gcc.c $(COMM_HDR) | test_x86
 	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
 	set -e; for i in afl-g++ afl-clang afl-clang++; do ln -sf afl-gcc $$i; done
 
-afl-as: afl-as.c afl-as.h $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
+ifdef AFL_NO_X86
+afl-as: afl-as.c afl-as-ppc.h $(COMM_HDR)
+	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS) -DTARGET_PPC
 	ln -sf afl-as as
+else
+afl-as: afl-as.c afl-as-x86.h $(COMM_HDR) | test_x86
+	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS) -DTARGET_X86
+	ln -sf afl-as as
+endif
 
 afl-fuzz: afl-fuzz.c $(COMM_HDR) | test_x86
 	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
