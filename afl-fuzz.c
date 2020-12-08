@@ -2026,7 +2026,7 @@ EXP_ST void init_forkserver(char** argv) {
     /* Dumping cores is slow and can lead to anomalies if SIGKILL is delivered
        before the dump is complete. */
 
-    r.rlim_max = r.rlim_cur = 0;
+    r.rlim_max = r.rlim_cur = RLIM_INFINITY;
 
     setrlimit(RLIMIT_CORE, &r); /* Ignore errors */
 
@@ -2306,7 +2306,7 @@ static u8 run_target(char** argv, u32 timeout) {
 
       }
 
-      r.rlim_max = r.rlim_cur = 0;
+      r.rlim_max = r.rlim_cur = RLIM_INFINITY;
 
       setrlimit(RLIMIT_CORE, &r); /* Ignore errors */
 
